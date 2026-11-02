@@ -1,0 +1,17 @@
+# 데이터·산출물은 저장소에 포함하지 않는다 (UCI·CER·기상 데이터 재배포 제한)
+data/
+**/data/
+*.bin
+*.pkl
+*.csv
+*.txt
+!requirements.txt
+!docker/requirements.txt
+runs/
+spark-warehouse/
+derby.log
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.env

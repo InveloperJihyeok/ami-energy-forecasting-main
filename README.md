@@ -28,11 +28,6 @@ GPU=0 DATA=/path/to/data bash docker/run.sh
 docker exec -it ami-dl bash
 ```
 
-`docker/Dockerfile` 은 `pytorch/pytorch:2.4.1-cuda12.1` 위에 OpenJDK 17(PySpark) 과 `docker/requirements.txt` 를 올린다.
-드라이버가 낮은 서버는 `IMG=... docker build --build-arg BASE=pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime` 로 바꾼다.
-`run.sh` 는 호스트 UID/GID 로 컨테이너를 띄우고, 저장소를 `/workspace`, 데이터를 `/data`(읽기 전용), 산출물을 `/runs` 에 마운트한 뒤
-torch · CUDA · Spark 동작을 바로 확인한다.
-
 ### 로컬
 
 ```bash
@@ -41,12 +36,12 @@ pip install -r requirements.txt       # Java 17 (PySpark), Chrome (Selenium) 은
 
 ## 데이터 (저장소에 포함하지 않음)
 
-| 데이터 | 출처 · 취득 방법 | 비고 |
+| 데이터 | 출처 | 비고 |
 |---|---|---|
 | UCI Individual household electric power consumption | https://archive.ics.uci.edu/dataset/235 | 1분 단위, 2006-12 ~ 2010-11 |
 | CER Smart Metering Project (아일랜드, 약 6천 가구) | ISSDA 에 이용 신청 https://www.ucd.ie/issda/data/commissionforenergyregulationcer/ | 재배포 금지 |
 | 기상 이력 (파리 오를리 LFPO, 섀넌 EINN) | `data_collection/` 크롤러로 직접 수집 | Weather Underground 약관상 결과 CSV 미포함 |
-| 논문 실험용 다중 에너지(전력 · 가스 · 온수 · 수도) 데이터 | 비공개 건물 데이터 | 코드만 공개 |
+| 논문 실험용 다중 에너지(전력 · 가스 · 온수 · 수도) 데이터 | https://data.mendeley.com/datasets/vmgjjy3z69/3 | 12시간 단위로 리샘플링 |
 
 ## 실행 순서
 
@@ -75,7 +70,6 @@ bash paper_code/self-supervised/exp.sh
 python paper_code/exp_all_infer.py
 ```
 
-`paper_code/` 는 데이터 루트를 환경변수 `AMI_ROOT` 로 받는다 (기본값: `paper_code/`).
 
 ## 주요 설계
 
@@ -85,29 +79,10 @@ python paper_code/exp_all_infer.py
 - **군집 기반 모델링** — 가구 일 패턴을 t-SNE/UMAP 으로 축소한 뒤 KMeans 등으로 묶고, 군집별로 모델을 따로 학습해 전체 모델과 비교한다 (`analysis/`, `icesi/modeling.py`).
 - **결측 에너지원 추론(논문)** — 전력만 계측되는 건물의 가스 · 온수 · 수도 사용량을, 다중 에너지가 계측된 건물 군집에서 자기지도 인코더(TAE · GAE · MTAD-GAT) 로 추론해 예측 입력으로 보강한다.
 
-## 결과 그림 (`paper_code/figures/`, 논문 그림 재현)
+## 시각화 (`paper_code/figures/`)
 
 | | |
 |---|---|
 | ![에너지원 간 상관](paper_code/figures/energy_correlation_heatmap.png) | ![에너지원별 분포](paper_code/figures/energy_distribution_plots.png) |
 | ![군집 수 민감도](paper_code/figures/cluster_sensitivity_lineplot.png) | ![구간별 부하 비교](paper_code/figures/load_comparison_between_2intervals.png) |
 
-## 참고 구현
-
-- Spark SQL 전처리와 군집 분석은 연구실 AMI 과제에서 작성한 코드를 경로 · 환경 인자만 바꿔 정리했다.
-- `paper_code/encodingModules/mtad_gat.py` 는 MTAD-GAT (Zhao et al., ICDM 2020) 공개 구현을 참고했다.
-
-## 검증 상태 (2026-11-02, macOS · Python 3.9 · Chrome 설치 환경)
-
-| 구성 요소 | 검증 방법 | 결과 |
-|---|---|---|
-| `data_collection/weather_crawler.py` | 파리 LFPO 2010-01-01 ~ 02-10 실제 수집 | 41일분 기온 · 습도 수집, 월당 약 10초 |
-| `spark_preprocessing/cer_preprocess.py` | CER 형식 합성 데이터(가구 6, 3일, 결측 5%)로 전 과정 실행 (JDK 21 + PySpark 3.5.1) | 그룹 1 · 2 가구 4개만 추출, master 144행 × 23열, 결측 0 |
-| `icesi/preprocess_uci.py` | UCI 원본(207만 행) + 크롤링 기상 CSV 로 실행 | 15분 단위 138,352행 × 18열, 결측 0 |
-| `icesi/modeling.py` | 위 산출물 + 기상 4열 CSV 로 `get_data → classify_pattern(t-SNE, KMeans) → pattern_plot` 실행 | 1,440일 × 108특징 군집 완료. 분류 · 예측 메서드는 미완성 초안으로 표기 |
-| `paper_code/` | 게재 논문 실험에 사용한 코드 그대로 (경로만 환경변수화) | 데이터 비공개로 재실행하지 않음 |
-| `docker/` | 연구실 서버에서 사용 중인 스크립트를 일반화 | 이 환경에는 Docker 데몬이 없어 빌드 미검증 |
-
-실제 CER 데이터(1.6억 행)는 ISSDA 라이선스상 포함하지 못해 합성 데이터로 흐름만 검증했다.
-
-# ami-energy-forecasting-main
